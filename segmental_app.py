@@ -5,6 +5,8 @@ import numpy as np
 from PIL import Image
 
 from segmentation.segmentation_utils import generate_image_labels
+from authentication.api_key_utils import get_api_key_from_s3
+
 
 # Disable annoying TensorFlow Logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -24,21 +26,30 @@ def allowed_file_type(filename):
 
 @app.route('/generate_labels', methods=['POST'])
 def segmental_endpoint():
-    if 'image' not in request.files:
-        return "An image file is required", 400
+    headers = request.headers
+    if "x-api-key" not in headers:
+        return "An API Key is required", 403
 
-    image = request.files['image']
+    auth = headers.get("x-api-key")
 
-    if image.filename == '':
-        return "An image file is required", 400
+    if auth == get_api_key_from_s3():
+        if 'image' not in request.files:
+            return "An image file is required", 400
 
-    if image and allowed_file_type(image.filename):
-        image = np.array(Image.open(image))
-        result = generate_image_labels(image)
+        image = request.files['image']
 
-        return jsonify({'labels_array': result.tolist()})
+        if image.filename == '':
+            return "An image file is required", 400
+
+        if image and allowed_file_type(image.filename):
+            image = np.array(Image.open(image))
+            result = generate_image_labels(image)
+
+            return jsonify({'labels_array': result.tolist()})
+        else:
+            return f"Invalid file extension, allowed extensions are {ALLOWED_EXTENSIONS}", 400
     else:
-        return f"Invalid file extension, allowed extensions are {ALLOWED_EXTENSIONS}", 400
+        return "Invalid API Key", 401
 
 
 if __name__ == '__main__':

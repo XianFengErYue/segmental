@@ -5,6 +5,7 @@ from PIL import Image
 import numpy as np
 
 from segmental_app import app
+from authentication.api_key_utils import get_api_key_from_s3
 
 
 TEST_IMAGE_FOLDER = Path(__file__).parent.joinpath('test_images').resolve()
@@ -22,7 +23,7 @@ def client():
 
 
 def test_post_invalid_request_no_image_returns_400(client):
-    response = client.post('/generate_labels')
+    response = client.post('/generate_labels', headers={"x-api-key": get_api_key_from_s3()})
 
     assert response.status_code == 400
     assert 'An image file is required' in str(response.data)
@@ -30,7 +31,7 @@ def test_post_invalid_request_no_image_returns_400(client):
 
 def test_post_invalid_request_text_image_returns_400(client):
     data = {'image': open(f'{DUMMY_FILE_FOLDER}/test_file.txt', 'rb')}
-    response = client.post('/generate_labels', data=data)
+    response = client.post('/generate_labels', data=data, headers={"x-api-key": get_api_key_from_s3()})
 
     assert response.status_code == 400
     assert 'Invalid file extension' in str(response.data)
@@ -38,7 +39,7 @@ def test_post_invalid_request_text_image_returns_400(client):
 
 def test_post_valid_request_returns_200_with_json_response(client):
     data = {'image': open(TEST_IMAGE, 'rb')}
-    response = client.post('/generate_labels', data=data)
+    response = client.post('/generate_labels', data=data, headers={"x-api-key": get_api_key_from_s3()})
 
     assert response.status_code == 200
     assert response.content_type == 'application/json'
@@ -46,7 +47,7 @@ def test_post_valid_request_returns_200_with_json_response(client):
 
 def test_post_valid_request_returns_json_response_with_array_result_as_list(client):
     data = {'image': open(TEST_IMAGE, 'rb')}
-    response = client.post('/generate_labels', data=data)
+    response = client.post('/generate_labels', data=data, headers={"x-api-key": get_api_key_from_s3()})
 
     assert type(response.json['labels_array']) == list
 
@@ -54,8 +55,22 @@ def test_post_valid_request_returns_json_response_with_array_result_as_list(clie
 def test_post_valid_request_returns_same_dimensions_array_as_original_image(client):
     in_size = Image.open(TEST_IMAGE).size
     data = {'image': open(TEST_IMAGE, 'rb')}
-    response = client.post('/generate_labels', data=data)
+    response = client.post('/generate_labels', data=data, headers={"x-api-key": get_api_key_from_s3()})
 
     result_array = np.array(response.json['labels_array'])
 
     assert result_array.shape == tuple(reversed(in_size))
+
+
+def test_post_invalid_request_no_auth_header_returns_403(client):
+    data = {'image': open(TEST_IMAGE, 'rb')}
+    response = client.post('/generate_labels', data=data)
+
+    assert response.status_code == 403
+
+
+def test_post_invalid_request_bad_auth_header_returns_401(client):
+    data = {'image': open(TEST_IMAGE, 'rb')}
+    response = client.post('/generate_labels', data=data, headers={"x-api-key": 'foo'})
+
+    assert response.status_code == 401
