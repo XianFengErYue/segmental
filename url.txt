@@ -1,0 +1,1 @@
+ http://35.153.39.99:80/generate_labels
